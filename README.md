@@ -97,9 +97,9 @@ yarn dev
 ![环境变量配置](assets/env.png)
 
 ### 4. 设置定时任务
-自动阅读和兑换体验卡都需要定时任务来触发执行，目前deno deploy自己的消息队列不太好用，所以采用 cloudflare 的 worker 来作为定时任务的触发器。
+自动阅读和兑换体验卡都需要定时任务来触发执行，目前deno deploy自己的消息队列不太好用，所以采用 cloudflare 的 worker 或者 [青龙面板](https://github.com/whyour/qinglong) 来作为定时任务的触发器。
 
-#### 自动阅读的触发器
+#### 自动阅读的触发器  （cloudflare）
 在 CloudFlare 控制台添加一个 worker，代码如下：
 ```js
 export default {
@@ -113,7 +113,7 @@ export default {
 设置 cron 触发周期为 `*/30 19-21 * * *`(北京时间每天凌晨3点到凌晨6点，中间每隔30分钟更新一次)，如下图所示：
 ![自动阅读的触发器](assets/cron-read.png)
 
-#### 自动兑换体验卡的触发器
+#### 自动兑换体验卡的触发器 （cloudflare）
 worker代码如下：
 ```js
 export default {
@@ -127,6 +127,70 @@ export default {
 触发周期设置为 `30 15 * * sun`(北京时间每周日晚11点30分)，如下图所示：
 ![兑换体验卡的触发器](assets/cron-exchange.png)
 
+
+#### 青龙面板
+4.1「订阅管理」下载脚本，配置如下：
+
+```
+类型：公开仓库
+链接：https://gh.api.99988866.xyz/https://github.com/champkeh/wereadx.git  # 此处前半部分用于代理，如果网络状况良好可以不加
+唯一值：注意这里自动生成的名称，用于后续的脚本执行
+定时类型：crontab
+定时规则：0 1 * * * # 每天凌晨1点拉取仓库
+白名单：qinglong
+文件后缀：ts
+```
+
+4.2「脚本管理」查看文件夹 `champkeh_wereadx` 下是否含有以下文件：
+
+此处的 `champkeh_wereadx` 就是第一步的「唯一值」
+
+```
+read.ts
+exchange.ts
+sendNotify.js
+```
+
+如果没有请查看第一步的日志。需注意,本文档仅涵盖脚本使用方法,不包含青龙面板的具体操作教学，请自行解决。
+
+
+4.3「环境变量」设置两个变量，与上文 cloudflare 中配置的 API_URL 一致
+
+```
+// 注意：此处的域名替换成你自己部署的域名，CRON_KEY 替换成上面环境变量配置的 CRON_KEY
+AUTO_READ_URL: https://[your.domain.com]/cron/read/v2?key=[CRON_KEY]
+CREDIT_URL: https://clean-parrot-53.deno.dev/cron/exchange-awards?key=cron
+```
+
+4.4「定时任务」添加 cron 任务
+
+此处的 `champkeh_wereadx` 就是第一步的「唯一值」
+
+- 自动阅读
+
+```
+命令/脚本：task champkeh_wereadx/read.ts
+定时规则：*/30 3-6 * * *
+```
+
+- 兑换体验卡
+
+```
+命令/脚本：task champkeh_wereadx/exchange.ts
+定时规则：30 23 * * sun
+```
+
+4.5 通知
+
+通知功能由青龙面板支持，只需要在「配置文件」中配置相应的变量即可，以下以飞书为例。
+
+飞书通知依赖群主机器人，请参考 [官方文档](https://www.feishu.cn/hc/zh-CN/articles/360024984973) 创建 [自定义机器人](https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot)。
+
+将形如 `https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxxxxxxxxxxx` 的 webhook 地址的最后部分复制到青龙面板的「配置文件」对应的飞书配置中：
+
+```sh
+export FSKEY='xxxxxxxxxxxxxxxxx'
+```
 
 ### 5. 后续更新操作
 如果发现 fork 的版本比源版本落后，需要更新到最新版本时，只需要在 github 更新仓库代码即可，不需要删除 deploy 上面的项目重新 fork。
